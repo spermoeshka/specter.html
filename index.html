@@ -284,7 +284,6 @@
 
     .modal-close-btn { width:100%; margin-top:0.5rem; background:none; border:1px solid var(--border); color:var(--text-muted); font-family:'Rajdhani',sans-serif; font-size:0.85rem; letter-spacing:0.1em; padding:0.8rem; border-radius:10px; cursor:pointer; }
 
-    /* ── КОМПАКТНЫЙ ДИСКЛЕЙМЕР ── */
     .disclaimer-modal {
       position:fixed; inset:0;
       background:rgba(0,0,0,0.88); backdrop-filter:blur(14px);
@@ -358,7 +357,6 @@
     }
     .disclaimer-agree-btn.enabled:active { transform:scale(0.98); }
 
-    /* ── СТРАНИЦА ТЕКСТА ДИСКЛЕЙМЕРА ── */
     .disclaimer-text-modal {
       position:fixed; inset:0;
       background:rgba(0,0,0,0.96); backdrop-filter:blur(10px);
@@ -391,6 +389,19 @@
     }
     .disclaimer-body p { margin-bottom:0.9rem; }
     .disclaimer-body .warn { color:rgba(255,100,100,0.7); }
+
+    /* Предупреждение если не в Telegram */
+    .tg-warning {
+      background: rgba(255,200,0,0.08);
+      border: 1px solid rgba(255,200,0,0.25);
+      border-radius: 10px;
+      padding: 0.8rem 1rem;
+      margin-bottom: 1rem;
+      font-family: 'Space Mono', monospace;
+      font-size: 0.65rem;
+      color: rgba(255,200,0,0.8);
+      display: none;
+    }
 
     .bottom-nav {
       position:fixed;
@@ -450,6 +461,10 @@
 
       <!-- ГЛАВНАЯ -->
       <div id="page-main" class="page active">
+        <!-- Предупреждение если открыто не в Telegram -->
+        <div id="tg-warning" class="tg-warning">
+          ⚠ Открыто вне Telegram. Некоторые функции недоступны.
+        </div>
         <div class="user-card">
           <div class="avatar-wrap">
             <div class="avatar" id="avatar-main">👤</div>
@@ -589,7 +604,7 @@
     </div>
   </div>
 
-  <!-- КОМПАКТНЫЙ ДИСКЛЕЙМЕР -->
+  <!-- ДИСКЛЕЙМЕР -->
   <div id="disclaimerModal" class="disclaimer-modal">
     <div class="disclaimer-sheet">
       <div class="modal-handle"></div>
@@ -606,7 +621,7 @@
     </div>
   </div>
 
-  <!-- ПОЛНЫЙ ТЕКСТ ДИСКЛЕЙМЕРА (открывается поверх) -->
+  <!-- ПОЛНЫЙ ТЕКСТ ДИСКЛЕЙМЕРА -->
   <div id="disclaimerTextModal" class="disclaimer-text-modal">
     <div class="disclaimer-text-sheet">
       <div class="modal-handle"></div>
@@ -645,33 +660,62 @@
       forever_20: { name:'20+ стран (Много LTE)', price:1800, keysUrl:'https://storage.yandexcloud.net/tariff20/отобранные.txt' }
     };
 
-    let userId = 'user_' + Math.random().toString(36).substring(2, 11);
+    // ─────────────────────────────────────────────
+    // ГЛАВНОЕ ИСПРАВЛЕНИЕ: правильная инициализация userId
+    // ─────────────────────────────────────────────
+    let userId = null;
+    let isInTelegram = false;
     let currentUserPlan = null;
-    let pendingPlanKey   = null;
-    let activationDate   = null;
+    let pendingPlanKey = null;
+    let activationDate = null;
 
-    // Telegram
-    if (window.Telegram?.WebApp) {
-      const tg = Telegram.WebApp;
-      tg.ready(); tg.expand(); tg.enableClosingConfirmation();
-      tg.MainButton.setText("Закрыть"); tg.MainButton.show();
-      tg.MainButton.onClick(() => tg.close());
-      const user = tg.initDataUnsafe?.user;
-      if (user) {
-        userId = String(user.id);
-        const name = [user.first_name, user.last_name].filter(Boolean).join(' ');
-        document.getElementById('name-main').textContent    = name;
-        document.getElementById('name-profile').textContent = name;
-        if (user.photo_url) {
-          ['avatar-main','avatar-profile'].forEach(id => {
-            const el = document.getElementById(id);
-            el.textContent = '';
-            el.style.backgroundImage = `url(${user.photo_url})`;
-            el.style.backgroundSize  = 'cover';
-          });
+    function initTelegram() {
+      if (window.Telegram?.WebApp) {
+        const tg = Telegram.WebApp;
+        tg.ready();
+        tg.expand();
+        tg.enableClosingConfirmation();
+        tg.MainButton.setText("Закрыть");
+        tg.MainButton.show();
+        tg.MainButton.onClick(() => tg.close());
+
+        const user = tg.initDataUnsafe?.user;
+
+        if (user?.id) {
+          // ✅ Реальный Telegram ID — постоянный, не меняется никогда
+          userId = String(user.id);
+          isInTelegram = true;
+
+          const name = [user.first_name, user.last_name].filter(Boolean).join(' ');
+          document.getElementById('name-main').textContent = name || 'Пользователь';
+          document.getElementById('name-profile').textContent = name || 'Пользователь';
+
+          if (user.photo_url) {
+            ['avatar-main', 'avatar-profile'].forEach(id => {
+              const el = document.getElementById(id);
+              el.textContent = '';
+              el.style.backgroundImage = `url(${user.photo_url})`;
+              el.style.backgroundSize = 'cover';
+              el.style.backgroundPosition = 'center';
+            });
+          }
         }
       }
+
+      // Если не в Telegram или user.id не получен — показываем предупреждение
+      if (!userId) {
+        // НЕ генерируем случайный ID — это было корнем проблемы!
+        // Вместо этого показываем предупреждение
+        userId = 'guest_no_tg';
+        document.getElementById('tg-warning').style.display = 'block';
+        document.getElementById('name-main').textContent = 'Гость';
+        document.getElementById('name-profile').textContent = 'Гость';
+        console.warn('Приложение открыто вне Telegram. userId не определён.');
+      }
     }
+
+    initTelegram();
+    // ─────────────────────────────────────────────
 
     function showPage(id) {
       document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
@@ -692,6 +736,12 @@
     });
 
     async function loadUserStatus() {
+      // Если нет нормального userId — не запрашиваем
+      if (!userId || userId === 'guest_no_tg') {
+        setStatus(false);
+        return;
+      }
+
       try {
         const res = await fetch(`${API_BASE}/status/${userId}`);
         if (!res.ok) throw new Error();
@@ -699,7 +749,7 @@
         const active = data.has_key;
         setStatus(active);
         currentUserPlan = data.plan || null;
-        activationDate  = data.activated_at || null;
+        activationDate = data.activated_at || null;
         if (active && currentUserPlan) updateProfileCard();
       } catch(e) {
         setStatus(false);
@@ -708,28 +758,37 @@
 
     function setStatus(active) {
       const text = active ? 'Активен' : 'Нет подписки';
-      const cls  = active ? 'status' : 'status error';
-      ['status-main','status-profile'].forEach(id => {
+      const cls = active ? 'status' : 'status error';
+      ['status-main', 'status-profile'].forEach(id => {
         const el = document.getElementById(id);
-        el.textContent = text; el.className = cls;
+        el.textContent = text;
+        el.className = cls;
       });
       document.getElementById('conn-status').textContent = active ? 'OK' : '—';
       const buyBtn = document.getElementById('buyBtn');
       buyBtn.textContent = active ? 'АКТИВЕН' : 'КУПИТЬ';
-      buyBtn.disabled    = active;
+      buyBtn.disabled = active;
     }
 
     function updateProfileCard() {
       const plan = PLANS[currentUserPlan];
       if (!plan) return;
       document.getElementById('sub-card-profile').style.display = 'block';
-      document.getElementById('prof-plan').textContent  = `Тариф: ${plan.name}`;
+      document.getElementById('prof-plan').textContent = `Тариф: ${plan.name}`;
       document.getElementById('prof-price').textContent = `Стоимость: ${plan.price} ₽`;
-      document.getElementById('prof-date').textContent  = `Дата: ${activationDate ? new Date(activationDate).toLocaleString('ru-RU') : new Date().toLocaleString('ru-RU')}`;
+      document.getElementById('prof-date').textContent = `Дата: ${activationDate ? new Date(activationDate).toLocaleString('ru-RU') : new Date().toLocaleString('ru-RU')}`;
     }
 
     function openTariffModal() {
-      if (document.getElementById('buyBtn').disabled) { alert('У вас уже есть активная подписка'); return; }
+      // Блокируем покупку если не в Telegram (нет реального userId)
+      if (!isInTelegram) {
+        alert('Покупка доступна только через Telegram');
+        return;
+      }
+      if (document.getElementById('buyBtn').disabled) {
+        alert('У вас уже есть активная подписка');
+        return;
+      }
       document.getElementById('tariffModal').classList.add('active');
     }
 
@@ -764,17 +823,33 @@
 
     async function selectPlan(planKey) {
       try {
-        const res = await fetch(`${API_BASE}/buy`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({user_id:userId, plan:planKey}) });
-        if (!res.ok) throw new Error();
-      } catch(e) { console.warn('Тестовая оплата'); }
+        const res = await fetch(`${API_BASE}/buy`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ user_id: userId, plan: planKey })
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          // Если уже куплено — просто обновляем UI
+          if (res.status === 409) {
+            alert('У вас уже есть активная подписка!');
+            await loadUserStatus();
+            showPage('page-main');
+            return;
+          }
+          throw new Error(err.detail || 'Ошибка покупки');
+        }
+      } catch(e) {
+        console.warn('Ошибка запроса к API:', e.message);
+      }
 
       const plan = PLANS[planKey];
       currentUserPlan = planKey;
-      activationDate  = new Date().toISOString();
+      activationDate = new Date().toISOString();
 
-      document.getElementById('success-plan').textContent  = `Тариф: ${plan.name}`;
+      document.getElementById('success-plan').textContent = `Тариф: ${plan.name}`;
       document.getElementById('success-price').textContent = `${plan.price} ₽`;
-      document.getElementById('success-date').textContent  = `Дата: ${new Date().toLocaleString('ru-RU')}`;
+      document.getElementById('success-date').textContent = `Дата: ${new Date().toLocaleString('ru-RU')}`;
 
       setStatus(true);
       updateProfileCard();
@@ -806,33 +881,45 @@
       const plan = PLANS[currentUserPlan];
       const subCard = document.getElementById('keys-sub-card');
       const copyBtn = document.getElementById('copyVlessProfile');
-      const noKeys  = document.getElementById('no-keys-msg');
+      const noKeys = document.getElementById('no-keys-msg');
       if (!currentUserPlan || !plan) {
-        subCard.style.display = 'none'; copyBtn.style.display = 'none'; noKeys.style.display = 'block'; return;
+        subCard.style.display = 'none';
+        copyBtn.style.display = 'none';
+        noKeys.style.display = 'block';
+        return;
       }
-      subCard.style.display = 'block'; copyBtn.style.display = 'block'; noKeys.style.display = 'none';
-      document.getElementById('keys-plan').textContent  = `Тариф: ${plan.name}`;
+      subCard.style.display = 'block';
+      copyBtn.style.display = 'block';
+      noKeys.style.display = 'none';
+      document.getElementById('keys-plan').textContent = `Тариф: ${plan.name}`;
       document.getElementById('keys-price').textContent = `Стоимость: ${plan.price} ₽`;
-      document.getElementById('keys-date').textContent  = `Дата: ${activationDate ? new Date(activationDate).toLocaleString('ru-RU') : '—'}`;
+      document.getElementById('keys-date').textContent = `Дата: ${activationDate ? new Date(activationDate).toLocaleString('ru-RU') : '—'}`;
     }
 
-    document.getElementById('buyBtn').onclick      = openTariffModal;
+    document.getElementById('buyBtn').onclick = openTariffModal;
     document.getElementById('settingsBtn').onclick = () => showPage('page-settings');
-    document.getElementById('myKeysBtn').onclick   = () => { loadMyKeysPage(); showPage('page-keys'); };
+    document.getElementById('myKeysBtn').onclick = () => { loadMyKeysPage(); showPage('page-keys'); };
     document.getElementById('copyVlessSuccess')?.addEventListener('click', copyVlessAll);
     document.getElementById('copyVlessProfile')?.addEventListener('click', copyVlessAll);
-    document.getElementById('tariffModal').addEventListener('click', e => { if (e.target === document.getElementById('tariffModal')) closeModal(); });
+    document.getElementById('tariffModal').addEventListener('click', e => {
+      if (e.target === document.getElementById('tariffModal')) closeModal();
+    });
 
     loadUserStatus();
     showPage('page-main');
 
     // BG PARTICLES
     const bgCanvas = document.getElementById('bg-canvas');
-    const bgCtx    = bgCanvas.getContext('2d');
+    const bgCtx = bgCanvas.getContext('2d');
     function resizeBg() { bgCanvas.width = window.innerWidth; bgCanvas.height = window.innerHeight; }
     resizeBg();
     window.addEventListener('resize', () => { resizeBg(); resizeLetter(); });
-    const particles = Array.from({length:70}, () => ({ x:Math.random()*bgCanvas.width, y:Math.random()*bgCanvas.height, radius:Math.random()*1.2+0.2, speedX:(Math.random()-0.5)*0.15, speedY:(Math.random()-0.5)*0.15, alpha:Math.random()*0.25+0.05 }));
+    const particles = Array.from({length:70}, () => ({
+      x: Math.random()*bgCanvas.width, y: Math.random()*bgCanvas.height,
+      radius: Math.random()*1.2+0.2,
+      speedX: (Math.random()-0.5)*0.15, speedY: (Math.random()-0.5)*0.15,
+      alpha: Math.random()*0.25+0.05
+    }));
     function animateBg() {
       bgCtx.fillStyle = 'rgba(0,0,0,0.1)';
       bgCtx.fillRect(0,0,bgCanvas.width,bgCanvas.height);
@@ -849,7 +936,7 @@
 
     // PRISM RAY
     const letterCanvas = document.getElementById('prismLetter');
-    const letterCtx    = letterCanvas.getContext('2d');
+    const letterCtx = letterCanvas.getContext('2d');
     function resizeLetter() { letterCanvas.width=window.innerWidth; letterCanvas.height=window.innerHeight; }
     resizeLetter();
     let time = 0;
@@ -874,7 +961,7 @@
       if(!logo) return requestAnimationFrame(animatePrism);
       const rect = logo.getBoundingClientRect();
       const hitX = rect.left + rect.width * 0.41;
-      const hitY = rect.top  + rect.height * 0.15;
+      const hitY = rect.top + rect.height * 0.15;
       const ANGLE_RAD = 33 * Math.PI / 180;
       const startX = -80;
       const startY = hitY - Math.tan(ANGLE_RAD) * (hitX - startX);
