@@ -664,57 +664,87 @@
     // ГЛАВНОЕ ИСПРАВЛЕНИЕ: правильная инициализация userId
     // ─────────────────────────────────────────────
     let userId = null;
-    let isInTelegram = false;
-    let currentUserPlan = null;
-    let pendingPlanKey = null;
-    let activationDate = null;
+let isInTelegram = false;
+let currentUserPlan = null;
+let pendingPlanKey = null;
+let activationDate = null;
 
-    function initTelegram() {
-      if (window.Telegram?.WebApp) {
-        const tg = Telegram.WebApp;
-        tg.ready();
-        tg.expand();
-        tg.enableClosingConfirmation();
-        tg.MainButton.setText("Закрыть");
-        tg.MainButton.show();
-        tg.MainButton.onClick(() => tg.close());
+// Функция ждёт реального user.id от Telegram
+function initTelegram() {
+  if (!window.Telegram?.WebApp) {
+    console.warn('Не в Telegram Mini App');
+    userId = 'guest_no_tg';
+    document.getElementById('tg-warning').style.display = 'block';
+    setStatus(false);
+    return;
+  }
 
-        const user = tg.initDataUnsafe?.user;
+  const tg = Telegram.WebApp;
+  tg.ready();
+  tg.expand();
+  tg.enableClosingConfirmation();
+  tg.MainButton.setText("Закрыть");
+  tg.MainButton.show();
+  tg.MainButton.onClick(() => tg.close());
 
-        if (user?.id) {
-          // ✅ Реальный Telegram ID — постоянный, не меняется никогда
-          userId = String(user.id);
-          isInTelegram = true;
+  // Берём initDataUnsafe.user.id — основной способ
+  let user = tg.initDataUnsafe?.user;
 
-          const name = [user.first_name, user.last_name].filter(Boolean).join(' ');
-          document.getElementById('name-main').textContent = name || 'Пользователь';
-          document.getElementById('name-profile').textContent = name || 'Пользователь';
+  // Если user.id сразу есть — супер
+  if (user?.id) {
+    userId = String(user.id);
+    isInTelegram = true;
+    applyUserData(user);
+    loadUserStatus();
+    return;
+  }
 
-          if (user.photo_url) {
-            ['avatar-main', 'avatar-profile'].forEach(id => {
-              const el = document.getElementById(id);
-              el.textContent = '';
-              el.style.backgroundImage = `url(${user.photo_url})`;
-              el.style.backgroundSize = 'cover';
-              el.style.backgroundPosition = 'center';
-            });
-          }
-        }
-      }
-
-      // Если не в Telegram или user.id не получен — показываем предупреждение
-      if (!userId) {
-        // НЕ генерируем случайный ID — это было корнем проблемы!
-        // Вместо этого показываем предупреждение
-        userId = 'guest_no_tg';
-        document.getElementById('tg-warning').style.display = 'block';
-        document.getElementById('name-main').textContent = 'Гость';
-        document.getElementById('name-profile').textContent = 'Гость';
-        console.warn('Приложение открыто вне Telegram. userId не определён.');
-      }
+  // Если не пришло сразу — ждём события tg.onEvent('ready')
+  tg.onEvent('ready', () => {
+    user = tg.initDataUnsafe?.user;
+    if (user?.id) {
+      userId = String(user.id);
+      isInTelegram = true;
+      applyUserData(user);
+      loadUserStatus();
+    } else {
+      console.error('Telegram user.id так и не пришёл');
+      userId = 'guest_no_tg';
+      document.getElementById('tg-warning').style.display = 'block';
+      setStatus(false);
     }
+  });
 
-    initTelegram();
+  // Дополнительная проверка через 1 секунду (на всякий случай)
+  setTimeout(() => {
+    if (!userId && tg.initDataUnsafe?.user?.id) {
+      user = tg.initDataUnsafe.user;
+      userId = String(user.id);
+      isInTelegram = true;
+      applyUserData(user);
+      loadUserStatus();
+    }
+  }, 1000);
+}
+
+// Применяем имя и аватарку
+function applyUserData(user) {
+  const name = [user.first_name, user.last_name].filter(Boolean).join(' ') || 'Пользователь';
+  document.getElementById('name-main').textContent = name;
+  document.getElementById('name-profile').textContent = name;
+
+  if (user.photo_url) {
+    ['avatar-main', 'avatar-profile'].forEach(id => {
+      const el = document.getElementById(id);
+      el.textContent = '';
+      el.style.backgroundImage = `url(${user.photo_url})`;
+      el.style.backgroundSize = 'cover';
+      el.style.backgroundPosition = 'center';
+    });
+  }
+}
+
+initTelegram();
     // ─────────────────────────────────────────────
 
     function showPage(id) {
